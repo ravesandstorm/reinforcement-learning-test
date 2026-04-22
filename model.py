@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import os
-import copy
 
 class Linear_QNet(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -36,28 +35,20 @@ class QTrainer:
         self.criterion = nn.MSELoss()
 
     def train_step(self, state, action, reward, next_state, gameOver):
-        # Pre-process lists cleanly
-        state = torch.tensor(np.array(state, dtype=float), dtype=torch.float)
-        next_state = torch.tensor(np.array(next_state, dtype=float), dtype=torch.float)
-        action = torch.tensor(np.array(action, dtype=np.longlong), dtype=torch.long)
-        reward = torch.tensor(np.array(reward, dtype=float), dtype=torch.float)
-        
-        # Vectorizing the gameOver check
-        gameOver_arr = np.array(gameOver, dtype=float)
-        if gameOver_arr.ndim == 0:
-            gameOver_tensor = torch.tensor([gameOver_arr.item()], dtype=torch.float)
-        else:
-            gameOver_tensor = torch.tensor(gameOver_arr, dtype=torch.float)
+        state = torch.tensor(np.array(state, dtype=np.float32), dtype=torch.float)
+        next_state = torch.tensor(np.array(next_state, dtype=np.float32), dtype=torch.float)
+        action = torch.tensor(np.array(action, dtype=np.int64), dtype=torch.long)
+        reward = torch.tensor(np.array(reward, dtype=np.float32), dtype=torch.float)
 
         if len(state.shape) == 1:
             state = torch.unsqueeze(state, 0)
             next_state = torch.unsqueeze(next_state, 0)
             action = torch.unsqueeze(action, 0)
             reward = torch.unsqueeze(reward, 0)
-            gameOver = (gameOver, )
+            gameOver = (gameOver,)
 
         pred = self.model(state)
-        target = pred.clone()
+        target = pred.clone().detach()
 
         with torch.no_grad():
             next_pred = self.target_model(next_state)
@@ -65,12 +56,12 @@ class QTrainer:
 
         for i in range(len(gameOver)):
             newQ = reward[i]
-            if not gameOver_tensor[i]:
+            if not gameOver[i]:
                 newQ = reward[i] + self.gamma * max_next_pred[i]
-                
-            target[i, torch.argmax(action[i]).item()] = newQ
+
+            target[i][torch.argmax(action[i]).item()] = newQ
 
         self.optimizer.zero_grad()
-        loss = self.criterion(target, pred)
+        loss = self.criterion(pred, target)
         loss.backward()
         self.optimizer.step()

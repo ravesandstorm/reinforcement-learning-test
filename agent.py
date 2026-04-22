@@ -34,8 +34,8 @@ class Agent:
         head = game.snake[0]
         point_l = Point(head.x - 20, head.y)
         point_r = Point(head.x + 20, head.y)
-        point_d = Point(head.x, head.y - 20)
-        point_u = Point(head.x, head.y + 20)
+        point_u = Point(head.x, head.y - 20)
+        point_d = Point(head.x, head.y + 20)
 
         dir_l = game.direction == Direction.LEFT
         dir_r = game.direction == Direction.RIGHT
@@ -70,8 +70,8 @@ class Agent:
             # Food location
             game.food.x < game.head.x, # food left
             game.food.x > game.head.x, # food right
-            game.food.y < game.head.y, # food down
-            game.food.y > game.head.y, # food up
+            game.food.y < game.head.y, # food up
+            game.food.y > game.head.y, # food down
         ]
 
         return np.array(state, dtype=int)
@@ -92,7 +92,7 @@ class Agent:
     def get_action(self, state):
         # Epsilon exponential decay with a smooth minimum
         # Revert to robust 0-80 randomness range that drops sharply over the first ~150 games
-        self.epsilon = 80 - self.numOfGames
+        self.epsilon = max(0, 80 - self.numOfGames)
         final_move = [0,0,0]
         if random.randint(0, 200) < self.epsilon:
             move = random.randint(0,2)
