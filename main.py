@@ -71,18 +71,18 @@ class SnakeGameAI:
         game_over = False
         if self.is_collision() or self.frameIteration > 100*len(self.snake):
             game_over = True
-            reward = -10
+            reward = -7.5 # small penalty for dying to encourage it to survive longer and find food
             return reward, game_over, self.score
 
         # place new food or just move
         if self.head == self.food:
             self.score += 1
-            reward = 10 # bigger reward for eating food to encourage it more strongly
+            reward = 20 # bigger reward for eating food to encourage it more strongly
             self.frameIteration = 0 # reset frame iteration since we made progress by eating food
             self._place_food()
         else:
             # hunger penalty to encourage shorter paths to food and prevent stalling
-            # reward -= 0.1
+            reward -= 0.35
             self.snake.pop()
 
         # update ui and clock
