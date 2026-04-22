@@ -9,9 +9,10 @@ from plotResult import plot
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
 LR = 0.001
+TARGET_UPDATE_FREQUENCY = 10
 
 config = {
-    'INPUT_SIZE': 12,
+    'INPUT_SIZE': 11,
     'HIDDEN_SIZE': 256,
     'OUTPUT_SIZE': 3
 }
@@ -19,11 +20,16 @@ config = {
 class Agent:
     def __init__(self):
         self.numOfGames = 0
-        self.epsilon = 0.0 # randomness
+        self.epsilon = 0 # randomness
         self.gamma = 0.9 # discount rate
         self.memory = deque(maxlen=MAX_MEMORY) # pop left most item
         self.model = Linear_QNet(config['INPUT_SIZE'], config['HIDDEN_SIZE'], config['OUTPUT_SIZE'])
-        self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
+        self.target_model = Linear_QNet(config['INPUT_SIZE'], config['HIDDEN_SIZE'], config['OUTPUT_SIZE'])
+        
+        self.target_model.load_state_dict(self.model.state_dict())
+        self.target_model.eval()
+
+        self.trainer = QTrainer(self.model, self.target_model, lr=LR, gamma=self.gamma)
     def get_state(self, game):
         head = game.snake[0]
         point_l = Point(head.x - 20, head.y)
@@ -46,29 +52,26 @@ class Agent:
             # Danger right
             (dir_u and game.is_collision(point_r)) or
             (dir_d and game.is_collision(point_l)) or
-            (dir_r and game.is_collision(point_u)) or
-            (dir_l and game.is_collision(point_d)),
+            (dir_l and game.is_collision(point_u)) or
+            (dir_r and game.is_collision(point_d)),
 
             # Danger left
             (dir_d and game.is_collision(point_r)) or
-            (dir_r and game.is_collision(point_l)) or
-            (dir_l and game.is_collision(point_u)) or
-            (dir_u and game.is_collision(point_d)),
+            (dir_u and game.is_collision(point_l)) or
+            (dir_r and game.is_collision(point_u)) or
+            (dir_l and game.is_collision(point_d)),
 
             # Move direction
-            dir_r,
-            dir_d,
             dir_l,
+            dir_r,
             dir_u,
+            dir_d,
 
             # Food location
             game.food.x < game.head.x, # food left
             game.food.x > game.head.x, # food right
             game.food.y < game.head.y, # food down
             game.food.y > game.head.y, # food up
-
-            # Distance from food
-            abs(game.food.x - game.head.x) + abs(game.food.y - game.head.y)
         ]
 
         return np.array(state, dtype=int)
@@ -87,8 +90,9 @@ class Agent:
     def train_short_memory(self, state, action, reward, next_state, gameOver):
         self.trainer.train_step(state, action, reward, next_state, gameOver)
     def get_action(self, state):
-        # random moves: tradeoff exploration / exploitation
-        self.epsilon = 90 - self.numOfGames
+        # Epsilon exponential decay with a smooth minimum
+        # Revert to robust 0-80 randomness range that drops sharply over the first ~150 games
+        self.epsilon = 80 - self.numOfGames
         final_move = [0,0,0]
         if random.randint(0, 200) < self.epsilon:
             move = random.randint(0,2)
@@ -134,6 +138,9 @@ def train():
             if score > record:
                 record = score
                 agent.model.save()
+
+            if agent.numOfGames % TARGET_UPDATE_FREQUENCY == 0:
+                agent.target_model.load_state_dict(agent.model.state_dict())
 
             print('Game', agent.numOfGames, 'Score', score, 'Current Record', record)
 

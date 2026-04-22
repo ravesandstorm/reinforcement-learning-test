@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import os
+import copy
 
 class Linear_QNet(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -12,11 +13,7 @@ class Linear_QNet(nn.Module):
         self.linear2 = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        """
-        Relu to Leaky Relu is not much of a computation increase, but is better for negative values
-        The jump from Leaky Relu to ELU is a much bigger increase, and brings in the domain of GELU, SiLU, etc.
-        """
-        x = F.leaky_relu(self.linear1(x))
+        x = F.relu(self.linear1(x))
         x = self.linear2(x)
         return x
 
@@ -29,19 +26,28 @@ class Linear_QNet(nn.Module):
         torch.save(self.state_dict(), file_name)
 
 class QTrainer:
-    def __init__(self, model, lr, gamma):
+    def __init__(self, model, target_model, lr, gamma):
         self.lr = lr
         self.gamma = gamma
         self.model = model
+        self.target_model = target_model
+        
         self.optimizer = optim.Adam(model.parameters(), lr=self.lr)
         self.criterion = nn.MSELoss()
+
     def train_step(self, state, action, reward, next_state, gameOver):
-        state = np.array(state, dtype=float)
-        state = torch.tensor(state, dtype=torch.float)
-        next_state = np.array(next_state, dtype=float)
-        next_state = torch.tensor(next_state, dtype=torch.float)
-        action = torch.tensor(action, dtype=torch.long)
-        reward = torch.tensor(reward, dtype=torch.float)
+        # Pre-process lists cleanly
+        state = torch.tensor(np.array(state, dtype=float), dtype=torch.float)
+        next_state = torch.tensor(np.array(next_state, dtype=float), dtype=torch.float)
+        action = torch.tensor(np.array(action, dtype=np.longlong), dtype=torch.long)
+        reward = torch.tensor(np.array(reward, dtype=float), dtype=torch.float)
+        
+        # Vectorizing the gameOver check
+        gameOver_arr = np.array(gameOver, dtype=float)
+        if gameOver_arr.ndim == 0:
+            gameOver_tensor = torch.tensor([gameOver_arr.item()], dtype=torch.float)
+        else:
+            gameOver_tensor = torch.tensor(gameOver_arr, dtype=torch.float)
 
         if len(state.shape) == 1:
             state = torch.unsqueeze(state, 0)
@@ -49,23 +55,22 @@ class QTrainer:
             action = torch.unsqueeze(action, 0)
             reward = torch.unsqueeze(reward, 0)
             gameOver = (gameOver, )
-        pred =  self.model(state)
-        
-        # Bellman equation
-        # QNew = reward + gamma * max(next_predicted Q value) -> only do this if not gameover
-        # pred.clone()
-        # preds[argmax(action)] = QNew
 
+        pred = self.model(state)
         target = pred.clone()
+
+        with torch.no_grad():
+            next_pred = self.target_model(next_state)
+            max_next_pred = torch.max(next_pred, dim=1)[0]
+
         for i in range(len(gameOver)):
             newQ = reward[i]
-            if not gameOver[i]:
-                newQ = reward[i] + self.gamma * torch.max(self.model(next_state[i]))
+            if not gameOver_tensor[i]:
+                newQ = reward[i] + self.gamma * max_next_pred[i]
                 
-            target[i][torch.argmax(action[i]).item()] = newQ
+            target[i, torch.argmax(action[i]).item()] = newQ
 
         self.optimizer.zero_grad()
         loss = self.criterion(target, pred)
         loss.backward()
-
         self.optimizer.step()
