@@ -1,12 +1,23 @@
 import argparse
 import os
 import sys
-
 import torch
 
 from agent import Agent
 from main import SnakeGameAI
 
+configs = [
+    {
+        "INPUT_SIZE": 11,
+        "HIDDEN_SIZE": 256,
+        "OUTPUT_SIZE": 3
+    },
+    {
+        "INPUT_SIZE": 12,
+        "HIDDEN_SIZE": 256,
+        "OUTPUT_SIZE": 3
+    },
+]
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a trained Snake DQN model (.pth) in inference mode")
@@ -28,7 +39,11 @@ def choose_action(agent: Agent, state):
     state0 = torch.tensor(state, dtype=torch.float)
     with torch.no_grad():
         prediction = agent.model(state0)
-    move = torch.argmax(prediction).item()
+    move = int(torch.argmax(prediction).item())
+    if move < 0:
+        move = 0
+    elif move > 2:
+        move = 2
     final_move = [0, 0, 0]
     final_move[move] = 1
     return final_move
@@ -42,8 +57,13 @@ def run_inference(model_path: str, max_games: int = 0) -> None:
 
     agent = Agent()
 
-    checkpoint = torch.load(model_path, map_location=torch.device("cpu"))
-    agent.model.load_state_dict(checkpoint)
+    try:
+        checkpoint = torch.load(model_path, map_location=torch.device("cpu"))
+        agent.model.load_state_dict(checkpoint)
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        print("Ensure the model architecture matches the checkpoint and that the file is a valid .pth model.")
+        sys.exit(1)
     agent.model.eval()
 
     game = SnakeGameAI()
