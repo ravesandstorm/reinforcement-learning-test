@@ -12,13 +12,13 @@ LR = 0.001
 TARGET_UPDATE_FREQUENCY = 10
 
 config = {
-    'INPUT_SIZE': 11,
+    'INPUT_SIZE': 11, # 11 original + 4 raycast distances + 4 tail awareness
     'HIDDEN_SIZE': 256,
     'OUTPUT_SIZE': 3
 }
 
 class Agent:
-    def __init__(self):
+    def __init__(self, config=config):
         self.numOfGames = 0
         self.epsilon = 0 # randomness
         self.gamma = 0.9 # discount rate
@@ -31,7 +31,18 @@ class Agent:
 
         self.trainer = QTrainer(self.model, self.target_model, lr=LR, gamma=self.gamma)
     def get_state(self, game):
-        head = game.snake[0]
+        # Helper to calculate normalized distance (0 to 1) to walls/body
+        def get_distance(point, direction_x, direction_y):
+            distance = 0
+            current = Point(point.x, point.y)
+            while not game.is_collision(current):
+                current = Point(current.x + direction_x, current.y + direction_y)
+                distance += 1
+                # Safety break to prevent infinite loops
+                if distance > max(game.w, game.h) // 20: break 
+            return distance / (max(game.w, game.h) // 20)
+
+        head = game.snake[0] # has x and y
         point_l = Point(head.x - 20, head.y)
         point_r = Point(head.x + 20, head.y)
         point_u = Point(head.x, head.y - 20)
@@ -43,6 +54,7 @@ class Agent:
         dir_d = game.direction == Direction.DOWN
 
         state = [
+            # --- 1. ORIGINAL LOCAL DANGER (Immediate 1-step) ---
             # Danger straight
             (dir_r and game.is_collision(point_r)) or
             (dir_l and game.is_collision(point_l)) or
@@ -61,20 +73,33 @@ class Agent:
             (dir_r and game.is_collision(point_u)) or
             (dir_l and game.is_collision(point_d)),
 
-            # Move direction
-            dir_l,
-            dir_r,
-            dir_u,
-            dir_d,
+            # --- 2. MOVE DIRECTION (Current Heading) ---
+            dir_l, dir_r, dir_u, dir_d,
 
-            # Food location
-            game.food.x < game.head.x, # food left
-            game.food.x > game.head.x, # food right
-            game.food.y < game.head.y, # food up
-            game.food.y > game.head.y, # food down
+            # --- 3. FOOD PROXIMITY (Relative) ---
+            game.food.x < game.head.x,
+            game.food.x > game.head.x,
+            game.food.y < game.head.y,
+            game.food.y > game.head.y,
+
+            # --- 4. NEW: LONG-RANGE VISION (Raycasting) ---
+            # Distance to closest obstacle in 4 cardinal directions
+            # get_distance(game.head, -20, 0),  # Distance Left
+            # get_distance(game.head, 20, 0),   # Distance Right
+            # get_distance(game.head, 0, -20),  # Distance Up
+            # get_distance(game.head, 0, 20),   # Distance Down
+
+            # --- 5. NEW: TAIL AWARENESS ---
+            # Knowing where the tail is helps the snake "follow its own tail" 
+            # which is a pro survival strategy to avoid trapping itself.
+            # game.snake[-1].x < game.head.x, # tail left
+            # game.snake[-1].x > game.head.x, # tail right
+            # game.snake[-1].y < game.head.y, # tail up
+            # game.snake[-1].y > game.head.y  # tail down
         ]
-
+        # state = [int(s) for s in state]
         return np.array(state, dtype=int)
+
     def remember(self, state, action, reward, next_state, gameOver):
         self.memory.append((state, action, reward, next_state, gameOver))
     
@@ -94,14 +119,14 @@ class Agent:
         # Revert to robust 0-80 randomness range that drops sharply over the first ~150 games
         self.epsilon = max(0, 80 - self.numOfGames)
         final_move = [0,0,0]
+        move: int
         if random.randint(0, 200) < self.epsilon:
             move: int = random.randint(0,2)
-            final_move[move] = 1
         else:
             state0 = torch.tensor(state, dtype=torch.float)
             prediction = self.model(state0)
             move = int(torch.argmax(prediction).item())
-            final_move[move] = 1
+        final_move[move] = 1
 
         return final_move
 

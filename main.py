@@ -77,9 +77,12 @@ class SnakeGameAI:
         # place new food or just move
         if self.head == self.food:
             self.score += 1
-            reward = 10
+            reward = 10 # bigger reward for eating food to encourage it more strongly
+            self.frameIteration = 0 # reset frame iteration since we made progress by eating food
             self._place_food()
         else:
+            # hunger penalty to encourage shorter paths to food and prevent stalling
+            # reward -= 0.1
             self.snake.pop()
 
         # update ui and clock
