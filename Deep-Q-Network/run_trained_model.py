@@ -19,11 +19,15 @@ configs = [
     },
 ]
 
+a = "checkpoints"
+b = "best_model_v1.pth"
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a trained Snake DQN model (.pth) in inference mode")
     parser.add_argument(
         "--model-path",
-        default=os.path.join("model", "model.pth"),
+        default=os.path.join(a, b),
+        # default=os.path.join("model", "model.pth"),
         help="Path to the trained .pth model file (default: model/model.pth)",
     )
     parser.add_argument(
