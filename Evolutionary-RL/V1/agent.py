@@ -1,5 +1,6 @@
 import argparse
 import os
+from pathlib import Path
 import random
 from dataclasses import dataclass
 from typing import Dict, List, Sequence, Tuple
@@ -166,8 +167,12 @@ def tournament_select(indices: Sequence[int], fitnesses: Sequence[float], tourna
     return max(sampled, key=lambda idx: fitnesses[idx])
 
 def checkpoint_model(model: LinearQNet, generation: int, checkpoint_dir: str):
-    os.makedirs(checkpoint_dir, exist_ok=True)
-    path = os.path.join(checkpoint_dir, f"best_model_gen_{generation:04d}.pth")
+    target_dir = os.path.join(os.getcwd(), checkpoint_dir)
+    # os.makedirs(target_dir, exist_ok=True)
+    # path = os.path.join(target_dir, f"best_model_gen_{generation:04d}.pth")
+    save_dir = Path(target_dir).resolve()
+    save_dir.mkdir(parents=True, exist_ok=True)
+    path = save_dir / f"best_model_gen_{generation:04d}.pth"
     torch.save(model.state_dict(), path)
 
 def initialize_population(config: EvolutionConfig) -> List[LinearQNet]:

@@ -18,8 +18,9 @@ class Linear_Net(nn.Module):
 
     def save(self, file_name='model.pth'):
         model_folder_path = './model'
-        if not os.path.exists(model_folder_path):
-            os.makedirs(model_folder_path)
+        target_folder = os.path.join(os.getcwd(), model_folder_path)
+        if not os.path.exists(target_folder):
+            os.makedirs(target_folder, exist_ok=True)
 
-        file_name = os.path.join(model_folder_path, file_name)
+        file_name = os.path.join(target_folder, file_name)
         torch.save(self.state_dict(), file_name)
