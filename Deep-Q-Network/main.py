@@ -69,7 +69,14 @@ class SnakeGameAI:
         # check if game over
         reward = 0
         game_over = False
-        if self.is_collision() or self.frameIteration > 100*len(self.snake):
+        empty_space = (self.w // BLOCK_SIZE) * (self.h // BLOCK_SIZE) - len(self.snake)
+
+        # starvation_limit = 100 * len(self.snake) # Basic starvation limit based on snake length
+        # starvation_limit = self.max_steps_without_food + 1.5 * len(self.snake)  # dynamic starvation threshold based on snake length
+        # starvation_limit = empty_space  # starvation threshold based on remaining empty space
+        starvation_limit = len(self.snake) + 0.5 * empty_space  # dynamic starvation threshold based on snake length and empty space
+        
+        if self.is_collision() or self.frameIteration > starvation_limit:
             game_over = True
             reward = -7.5 # small penalty for dying to encourage it to survive longer and find food
             return reward, game_over, self.score
